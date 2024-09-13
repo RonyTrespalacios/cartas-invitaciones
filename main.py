@@ -1,61 +1,105 @@
 import streamlit as st
-from fpdf import FPDF
+from fillpdf import fillpdfs
+from io import BytesIO
 import base64
+from babel.dates import format_date
+from datetime import datetime
 
-# Función para generar el PDF
-def generar_pdf(nombre, correo, cedula):
-    pdf = FPDF()
-    pdf.add_page()
+# Función para rellenar el PDF con los datos del usuario y almacenarlo en caché para su descarga
+@st.cache_data
+def generate_filled_pdf(name, institution, position, email, date):
+    # Formatear la fecha como "19 de Septiembre de 2024"
+    formatted_date = format_date(date, format="d 'de' MMMM 'de' y", locale='es_ES')
 
-    # Título de la carta
-    pdf.set_font("Arial", "B", 16)
-    pdf.cell(200, 10, txt="Carta de Invitación", ln=True, align="C")
+    # Datos de ejemplo con el primer nombre seguido de una coma
+    example_data = {
+        'Nombre': name,  # Nombre completo del usuario
+        'Fecha': formatted_date,  # Fecha formateada
+        'cargo_persona': position,
+        'afiliacion': institution,
+        'Correo': email,
+        'Primer_nombre': name.split()[0] + ","  # Primer nombre con una coma al final
+    }
 
-    # Espacio
-    pdf.ln(10)
-
-    # Cuerpo de la carta
-    pdf.set_font("Arial", size=12)
-    texto = (f"Estimado/a {nombre},\n\n"
-             f"Nos complace invitarle al Torneo de Robótica que se llevará a cabo el 25 de octubre.\n"
-             f"Sus datos de registro son los siguientes:\n\n"
-             f"Nombre: {nombre}\n"
-             f"Correo: {correo}\n"
-             f"Cédula: {cedula}\n\n"
-             "Esperamos contar con su valiosa participación en este evento, "
-             "que reunirá a entusiastas y profesionales de la robótica.\n\n"
-             "Saludos cordiales,\n"
-             "Comité Organizador del Torneo de Robótica")
+    # Generar el PDF en memoria (BytesIO)
+    pdf_buffer = BytesIO()
     
-    pdf.multi_cell(0, 10, txt=texto)
+    # Escribir los datos en el PDF en memoria
+    fillpdfs.write_fillable_pdf("Template01.pdf", pdf_buffer, example_data)
 
-    return pdf
+    # Rebobinar el buffer después de escribir
+    pdf_buffer.seek(0)
 
-# Función para convertir el PDF a un enlace descargable
-def convertir_pdf_a_descargable(pdf):
-    pdf.output("invitacion.pdf")
-    with open("invitacion.pdf", "rb") as f:
-        pdf_data = f.read()
-    b64_pdf = base64.b64encode(pdf_data).decode('utf-8')
-    pdf_link = f'<a href="data:application/octet-stream;base64,{b64_pdf}" download="invitacion_torneo_robotica.pdf">Descargar carta de invitación</a>'
-    return pdf_link
+    # Aplanar el PDF en memoria para evitar que los campos sean editables
+    fillpdfs.flatten_pdf(pdf_buffer, pdf_buffer)
 
-# Interfaz de Streamlit
-st.title("Generador de Carta de Invitación al Torneo de Robótica")
+    # Rebobinar el buffer después de aplanar
+    pdf_buffer.seek(0)
+    
+    # Retornar el buffer en memoria del PDF
+    return pdf_buffer
 
-# Entradas del formulario
-nombre = st.text_input("Nombre completo")
-correo = st.text_input("Correo electrónico")
-cedula = st.text_input("Cédula")
+# Función para mostrar la descarga con un botón estilizado
+def show_pdf_download_button(pdf_bytes, filename):
+    # Como pdf_bytes ya es de tipo 'bytes', no necesitamos usar getvalue()
+    b64_pdf = base64.b64encode(pdf_bytes).decode('utf-8')
+    href = f'''
+    <a href="data:application/octet-stream;base64,{b64_pdf}" download="{filename}">
+        <button style="
+            display: inline-block;
+            padding: 10px 20px;
+            font-size: 18px;
+            font-family: 'Poppins', sans-serif;
+            color: white;
+            background-color: #4CAF50;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        " onmouseover="this.style.backgroundColor='#45a049';" onmouseout="this.style.backgroundColor='#4CAF50';">
+        📄 Descargar carta de invitación
+        </button>
+    </a>
+    '''
+    st.markdown(href, unsafe_allow_html=True)
 
-# Botón para generar el PDF
-if st.button("Generar carta de invitación"):
-    if nombre and correo and cedula:
-        # Generar el PDF con los datos ingresados
-        pdf = generar_pdf(nombre, correo, cedula)
-        
-        # Mostrar enlace para descargar el PDF
-        link_descarga = convertir_pdf_a_descargable(pdf)
-        st.markdown(link_descarga, unsafe_allow_html=True)
+# App de Streamlit
+# Agregar imagen de encabezado centrada
+st.markdown('<div class="center-image">', unsafe_allow_html=True)
+st.image("image.png", width=700)
+st.markdown('</div>', unsafe_allow_html=True)
+
+st.title("📩 Invitación METAROBOTS 2024")
+
+# Establecer las fechas límite para el input
+min_date = datetime.now().date()  # Fecha actual
+max_date = datetime(2024, 10, 25).date()  # 25 de octubre de 2024
+
+# Formulario para ingresar los datos
+with st.form("form"):
+    name = st.text_input("🔤 Digita tu nombre completo:")
+    institution = st.text_input("🏫 ¿De qué institución perteneces? (Ej: Unillanos):")
+    position = st.text_input("🎓 ¿Qué cargo tienes en dicha institución? (Ej: Estudiante):")
+    email = st.text_input("✉️ Digita tu correo electrónico:")
+    date = st.date_input("📅 Selecciona la fecha de emisión:", min_value=min_date, max_value=max_date)
+    
+    submitted = st.form_submit_button("📄 Generar Carta")
+
+# Validación de datos
+if submitted:
+    if not name or not institution or not position or not email:
+        st.error("❌ Por favor completa todos los campos antes de continuar.")
+    elif "@" not in email:
+        st.error("❌ Correo electrónico inválido. Por favor ingresa un correo válido.")
     else:
-        st.error("Por favor, complete todos los campos.")
+        st.info("📄 Generando PDF...")
+
+        # Generar el PDF con la función correcta (generate_filled_pdf)
+        modified_pdf = generate_filled_pdf(name, institution, position, email, date)
+
+        # Barra de progreso
+        with st.spinner("⏳ Generando PDF..."):
+            st.progress(100)
+
+        # Botón de descarga estilizado
+        show_pdf_download_button(modified_pdf.getvalue(), "Carta_Invitacion.pdf")
