@@ -63,10 +63,24 @@ def show_pdf_download_button(pdf_bytes, filename):
     '''
     st.markdown(href, unsafe_allow_html=True)
 
-# App de Streamlit
-# Agregar imagen de encabezado centrada
+# Estilo CSS para centrar la imagen y hacerla responsive
+st.markdown('''
+    <style>
+    .center-image {
+        display: flex;
+        justify-content: center;
+        width: 100%;
+    }
+    .center-image img {
+        max-width: 100%; /* Asegura que la imagen sea responsive */
+        height: auto; /* Mantiene la relación de aspecto */
+    }
+    </style>
+''', unsafe_allow_html=True)
+
+# Agregar imagen de encabezado centrada y responsive
 st.markdown('<div class="center-image">', unsafe_allow_html=True)
-st.image("image.png", width=700)
+st.image("image.png", use_column_width=True)  # La imagen ahora se ajusta al 100% del ancho disponible
 st.markdown('</div>', unsafe_allow_html=True)
 
 st.title("📩 Invitación METAROBOTS 2024")
